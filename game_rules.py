@@ -1,4 +1,4 @@
-from ai.pathfinding import BFSPathfinder
+from ai.pathfinding import AStarPathfinder
 import copy
 
 class Board:
@@ -30,8 +30,8 @@ class Board:
             pos = override_pos or self.get_pawn_position(player)
             opp = self.get_opponent_position(player)
             return get_legal_moves(pos, opp, temp_walls)
-        bfs = BFSPathfinder(temp_legal)
-        if bfs.find_path_length(self, 1) is None or bfs.find_path_length(self, 2) is None:
+        pathfinder = AStarPathfinder(temp_legal)
+        if pathfinder.find_path_length(self, 1) is None or pathfinder.find_path_length(self, 2) is None:
             return False
         return True
 
@@ -60,34 +60,19 @@ class Board:
 BOARD_SIZE = 9
 
 def is_blocked(r1, c1, r2, c2, walls):
-    """
-    Check if movement from (r1,c1) to (r2,c2) is blocked by a wall.
-    
-    FIXED: Corrected wall blocking logic
-    
-    H wall at (row, col):
-      - Blocks vertical movement crossing the horizontal line at row
-      - Affects columns col and col+1
-    
-    V wall at (row, col):
-      - Blocks horizontal movement crossing the vertical line at col
-      - Affects rows row and row+1
-    """
     for (wall_row, wall_col, orientation, _) in walls:
         if orientation == 'H':
             # H wall blocks vertical movement
-            if abs(r1 - r2) == 1 and c1 == c2:  # Vertical move
-                # Moving down (r2 > r1) or up (r2 < r1)
-                crossing_row = max(r1, r2)  # The row boundary being crossed
+            if abs(r1 - r2) == 1 and c1 == c2:
+                crossing_row = max(r1, r2)
                 if crossing_row == wall_row:
                     # Check if the column is affected by this wall
                     if c1 == wall_col or c1 == wall_col + 1:
                         return True
         elif orientation == 'V':
             # V wall blocks horizontal movement
-            if abs(c1 - c2) == 1 and r1 == r2:  # Horizontal move
-                # Moving right (c2 > c1) or left (c2 < c1)
-                crossing_col = max(c1, c2)  # The column boundary being crossed
+            if abs(c1 - c2) == 1 and r1 == r2:
+                crossing_col = max(c1, c2)
                 if crossing_col == wall_col:
                     # Check if the row is affected by this wall
                     if r1 == wall_row or r1 == wall_row + 1:
@@ -112,7 +97,6 @@ def get_legal_moves(pawn_pos, opponent_pos, walls):
                                              and not is_blocked(nr, nc, jr, jc, walls))
                     
                     if straight_jump_possible:
-                        # Straight jump over opponent
                         moves.append([jr, jc])
                     else:
                         # L-shaped jump: perpendicular moves from opponent's position
@@ -123,14 +107,10 @@ def get_legal_moves(pawn_pos, opponent_pos, walls):
                                 if not is_blocked(nr, nc, side_r, side_c, walls):
                                     moves.append([side_r, side_c])
                 else:
-                    # Normal move (no opponent in the way)
                     moves.append([nr, nc])
     return moves
 
 def is_valid_wall(row, col, orientation, walls):
-    """
-    FIXED: Correct wall validation to prevent overlapping and intersecting walls
-    """
     # Check boundaries
     if row < 0 or row >= BOARD_SIZE - 1 or col < 0 or col >= BOARD_SIZE - 1:
         return False
@@ -146,43 +126,20 @@ def is_valid_wall(row, col, orientation, walls):
         
         # 3. FIXED: Check for overlapping adjacent walls of SAME orientation
         if orientation == 'H' and wo == 'H':
-            # Both horizontal walls
-            # H wall at (row, col) occupies space between cols [col, col+2)
-            # Check if they're on same row and overlap
             if wr == row:
-                # Check if segments overlap
-                # Wall 1: [col, col+2), Wall 2: [wc, wc+2)
                 if not (col + 2 <= wc or wc + 2 <= col):
-                    # Segments overlap!
                     return False
-        
         elif orientation == 'V' and wo == 'V':
-            # Both vertical walls
-            # V wall at (row, col) occupies space between rows [row, row+2)
-            # Check if they're on same column and overlap
             if wc == col:
-                # Check if segments overlap
-                # Wall 1: [row, row+2), Wall 2: [wr, wr+2)
                 if not (row + 2 <= wr or wr + 2 <= row):
-                    # Segments overlap!
                     return False
         
         # 4. FIXED: Check for perpendicular intersection (H crosses V)
         elif orientation == 'H' and wo == 'V':
-            # New H wall at (row, col) spans columns [col, col+2) at row boundary
-            # Existing V wall at (wr, wc) spans rows [wr, wr+2) at col boundary
-            # They intersect if:
-            # - V wall's column (wc) is within H wall's column range
-            # - H wall's row is within V wall's row range
             if col < wc < col + 2 and wr < row < wr + 2:
                 return False
         
         elif orientation == 'V' and wo == 'H':
-            # New V wall at (row, col) spans rows [row, row+2) at col boundary
-            # Existing H wall at (wr, wc) spans columns [wc, wc+2) at row boundary
-            # They intersect if:
-            # - H wall's column (wc) is within V wall's column range
-            # - V wall's row is within H wall's row range
             if wc < col < wc + 2 and row < wr < row + 2:
                 return False
     

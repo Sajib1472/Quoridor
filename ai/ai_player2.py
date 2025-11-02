@@ -1,14 +1,9 @@
 # ai/ai_player2.py
 import math
 import random
-from ai.pathfinding import BFSPathfinder
+from ai.pathfinding import AStarPathfinder
 
 class FuzzySystem2:
-    """
-    Human-like fuzzy system for AIPlayer2 - different personality.
-    More bold and opportunistic, takes calculated risks.
-    """
-
     def __init__(self):
         self.very_close_threshold = 2.0
         self.close_threshold = 4.0
@@ -24,7 +19,6 @@ class FuzzySystem2:
         self.risk_tolerance = 0.6
 
     def fuzzify_path_diff(self, diff):
-        """More optimistic fuzzification"""
         very_close = max(0, 1 - abs(diff) / self.very_close_threshold)
         close = max(0, 1 - abs(diff) / self.close_threshold) if abs(diff) < self.close_threshold else 0
         
@@ -118,21 +112,21 @@ class FuzzySystem2:
     
 class AIPlayer2:
     """
-    AI Player 2 uses Expectimax + Fuzzy Logic + BFS Pathfinding
+    AI Player 2 uses Expectimax + Fuzzy Logic + A* Pathfinding
     """
 
     def __init__(self, player_id, max_depth=3):
         self.player_id = player_id
         self.max_depth = max_depth
-        self.bfs = BFSPathfinder(lambda p, **kwargs: [])
+        self.pathfinder = AStarPathfinder(lambda p, **kwargs: [])
         self.fuzzy = FuzzySystem2()
         self.recent_positions = []
         self.max_history = 6
 
     def choose_move(self, board, return_fuzzy=False):
-        self.bfs.get_legal_moves = board.get_legal_moves
-        p1_dist = self.bfs.find_path_length(board, 1)
-        p2_dist = self.bfs.find_path_length(board, 2)
+        self.pathfinder.get_legal_moves = board.get_legal_moves
+        p1_dist = self.pathfinder.find_path_length(board, 1)
+        p2_dist = self.pathfinder.find_path_length(board, 2)
         
         # Handle None distances
         if p1_dist is None:
@@ -260,11 +254,34 @@ class AIPlayer2:
             return None
         
         goal_row = 0 if self.player_id == 1 else 8
+        
+        # Check for immediate winning move
         for move in legal_moves:
             if move[0] == goal_row:
                 return move
         
         current_pos = tuple(board.get_pawn_position(self.player_id))
+
+        # Get the optimal path using A*
+        self.pathfinder.get_legal_moves = board.get_legal_moves
+        optimal_path = self.pathfinder.find_path(board, self.player_id)
+        
+        # If we have a clear optimal path, follow it
+        if optimal_path and len(optimal_path) > 1:
+            # The next position in the optimal path
+            next_pos_in_path = list(optimal_path[1])
+            
+            # Check if this move is legal and not a recent repetition
+            if next_pos_in_path in legal_moves:
+                move_tuple = tuple(next_pos_in_path)
+                # Allow following path unless we've been there very recently
+                if move_tuple not in self.recent_positions[-2:]:
+                    self.recent_positions.append(move_tuple)
+                    if len(self.recent_positions) > self.max_history:
+                        self.recent_positions.pop(0)
+                    return next_pos_in_path
+        
+        # Fallback: Use expectimax for complex situations or when path following isn't ideal
         best_score = -math.inf
         best_move = None
 
@@ -309,10 +326,10 @@ class AIPlayer2:
         best_score = -math.inf
         candidates = []
         
-        self.bfs.get_legal_moves = board.get_legal_moves
+        self.pathfinder.get_legal_moves = board.get_legal_moves
         opponent_id = 3 - self.player_id
-        opponent_dist = self.bfs.find_path_length(board, opponent_id)
-        my_dist = self.bfs.find_path_length(board, self.player_id)
+        opponent_dist = self.pathfinder.find_path_length(board, opponent_id)
+        my_dist = self.pathfinder.find_path_length(board, self.player_id)
         
         opp_pos = board.get_pawn_position(opponent_id)
         if opp_pos is None:
@@ -333,8 +350,8 @@ class AIPlayer2:
                             if board.is_valid_wall(row, col, orient):
                                 new_board = board.clone()
                                 new_board.place_wall(self.player_id, row, col, orient)
-                                self.bfs.get_legal_moves = new_board.get_legal_moves
-                                new_opp_dist = self.bfs.find_path_length(new_board, opponent_id)
+                                self.pathfinder.get_legal_moves = new_board.get_legal_moves
+                                new_opp_dist = self.pathfinder.find_path_length(new_board, opponent_id)
                                 
                                 if new_opp_dist is not None and new_opp_dist > 1:
                                     score = 1000
@@ -365,8 +382,8 @@ class AIPlayer2:
                 if board.is_valid_wall(row, col, orient):
                     new_board = board.clone()
                     new_board.place_wall(self.player_id, row, col, orient)
-                    self.bfs.get_legal_moves = new_board.get_legal_moves
-                    new_opp_dist = self.bfs.find_path_length(new_board, opponent_id)
+                    self.pathfinder.get_legal_moves = new_board.get_legal_moves
+                    new_opp_dist = self.pathfinder.find_path_length(new_board, opponent_id)
                     
                     if opponent_dist is None or new_opp_dist is None:
                         continue
@@ -475,9 +492,9 @@ class AIPlayer2:
         return list(positions)
 
     def evaluate(self, board):
-        self.bfs.get_legal_moves = board.get_legal_moves
-        p1_dist = self.bfs.find_path_length(board, 1)
-        p2_dist = self.bfs.find_path_length(board, 2)
+        self.pathfinder.get_legal_moves = board.get_legal_moves
+        p1_dist = self.pathfinder.find_path_length(board, 1)
+        p2_dist = self.pathfinder.find_path_length(board, 2)
 
         if p1_dist == 0:
             return math.inf if self.player_id == 1 else -math.inf

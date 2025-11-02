@@ -266,10 +266,10 @@ def main():
         # Safety check
         if move_count >= max_moves:
             print(f"\n⚠️ Safety limit reached ({max_moves} moves)")
-            from ai.pathfinding import BFSPathfinder
-            bfs = BFSPathfinder(board.get_legal_moves)
-            p1_dist = bfs.find_path_length(board, 1)
-            p2_dist = bfs.find_path_length(board, 2)
+            from ai.pathfinding import AStarPathfinder
+            pathfinder = AStarPathfinder(board.get_legal_moves)
+            p1_dist = pathfinder.find_path_length(board, 1)
+            p2_dist = pathfinder.find_path_length(board, 2)
             if p1_dist is not None and p2_dist is not None:
                 winner = 1 if p1_dist < p2_dist else 2
             elif p1_dist is not None:
